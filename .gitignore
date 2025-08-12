@@ -41,3 +41,18 @@ venv.bak/
 
 # Azure
 .azure/
+
+# GitHub Runner - Exclude local runner configuration and runtime data
+github-runner/.env
+github-runner/.runner
+github-runner/.credentials*
+github-runner/_diag/
+github-runner/_work/
+github-runner/runner-data/
+github-runner/runner-cache/
+github-runner/logs/
+github-runner/*.log
+github-runner/svc.sh
+
+# Docker Compose runtime files
+docker-compose.override.yml

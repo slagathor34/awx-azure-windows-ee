@@ -1,0 +1,32 @@
+# GitHub Runner Runtime Files
+# These files contain sensitive information and runtime data that should not be committed
+
+# Environment configuration (contains GitHub tokens)
+.env
+
+# GitHub Actions Runner registration data
+.runner
+.credentials*
+.path
+
+# Runtime directories created by the GitHub Actions Runner
+_diag/
+_work/
+.tools/
+
+# Process and service files
+svc.sh
+runsvc.sh
+
+# Log files
+*.log
+logs/
+
+# Cache and temporary data
+runner-cache/
+runner-data/
+.cache/
+
+# Docker volumes and runtime data (if mapped locally)
+volumes/
+data/

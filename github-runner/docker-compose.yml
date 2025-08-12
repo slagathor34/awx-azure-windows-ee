@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  github-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: github-runner-rhel-windows
+    privileged: true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - runner-work:/home/runner/_work
+      - runner-cache:/home/runner/.cache
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - GITHUB_REPOSITORY=${GITHUB_REPOSITORY:-slagathor34/awx-azure-windows-ee}
+      - RUNNER_NAME=${RUNNER_NAME:-docker-runner-rhel-windows}
+      - RUNNER_LABELS=${RUNNER_LABELS:-self-hosted,docker,linux,x64,rhel-windows-ee}
+    restart: unless-stopped
+    networks:
+      - github-runner-network
+
+networks:
+  github-runner-network:
+    driver: bridge
+
+volumes:
+  runner-work:
+  runner-cache:

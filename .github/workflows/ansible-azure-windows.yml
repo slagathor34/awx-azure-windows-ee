@@ -44,13 +44,8 @@ env:
 
 jobs:
   redhat-automation:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, rhel-windows-ee]
     if: ${{ inputs.target_os == 'redhat' || inputs.target_os == 'both' || github.event_name == 'push' }}
-    
-    # Use the refactored execution environment
-    container:
-      image: sstormes/awx-azure-ee:latest
-      options: --user root
     
     steps:
     - name: Checkout repository
@@ -58,15 +53,15 @@ jobs:
     
     - name: Verify Red Hat automation tools
       run: |
-        ansible --version
-        ansible-runner --version
-        python3 -c "import rpm; print('RPM module available')"
-        ssh -V
-        sshpass -V
+        docker run --rm sstormes/awx-azure-ee:latest ansible --version
+        docker run --rm sstormes/awx-azure-ee:latest ansible-runner --version
+        docker run --rm sstormes/awx-azure-ee:latest python3 -c "import rpm; print('RPM module available')"
+        docker run --rm sstormes/awx-azure-ee:latest ssh -V
+        docker run --rm sstormes/awx-azure-ee:latest sshpass -V
     
     - name: List available collections
       run: |
-        ansible-galaxy collection list | grep -E "(redhat|posix|general)"
+        docker run --rm sstormes/awx-azure-ee:latest ansible-galaxy collection list | grep -E "(redhat|posix|general)"
     
     - name: Set up SSH key (if provided)
       run: |
@@ -87,10 +82,14 @@ jobs:
     
     - name: Run Red Hat configuration playbook
       run: |
-        ansible-playbook playbooks/redhat-config.yml \
-          -i inventories/${{ inputs.environment || 'dev' }}/hosts.yml \
-          -e target_environment=${{ inputs.environment || 'dev' }} \
-          -v
+        docker run --rm -v ${{ github.workspace }}:/workspace -w /workspace \
+          -e RHEL_USERNAME -e RHEL_PASSWORD -e CENTOS_USERNAME -e SSH_PRIVATE_KEY_FILE -e SSH_PUBLIC_KEY \
+          -e ANSIBLE_HOST_KEY_CHECKING=false -e ANSIBLE_SSH_PIPELINING=true \
+          sstormes/awx-azure-ee:latest \
+          ansible-playbook playbooks/redhat-config.yml \
+            -i inventories/${{ inputs.environment || 'dev' }}/hosts.yml \
+            -e target_environment=${{ inputs.environment || 'dev' }} \
+            -v
       if: hashFiles('playbooks/redhat-config.yml') != ''
       env:
         ANSIBLE_HOST_KEY_CHECKING: false
@@ -107,12 +106,8 @@ jobs:
         ANSIBLE_HOST_KEY_CHECKING: false
 
   windows-automation:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, rhel-windows-ee]
     if: ${{ inputs.target_os == 'windows' || inputs.target_os == 'both' || github.event_name == 'push' }}
-    
-    container:
-      image: sstormes/awx-azure-ee:latest
-      options: --user root
     
     steps:
     - name: Checkout repository
@@ -120,15 +115,15 @@ jobs:
     
     - name: Verify Windows automation tools
       run: |
-        ansible --version
-        ansible-runner --version
-        python3 -c "import winrm; print('WinRM available')"
-        python3 -c "import ntlm_auth; print('NTLM authentication available')"
-        python3 -c "import requests_credssp; print('CredSSP available')"
+        docker run --rm sstormes/awx-azure-ee:latest ansible --version
+        docker run --rm sstormes/awx-azure-ee:latest ansible-runner --version
+        docker run --rm sstormes/awx-azure-ee:latest python3 -c "import winrm; print('WinRM available')"
+        docker run --rm sstormes/awx-azure-ee:latest python3 -c "import ntlm_auth; print('NTLM authentication available')"
+        docker run --rm sstormes/awx-azure-ee:latest python3 -c "import requests_credssp; print('CredSSP available')"
     
     - name: List Windows collections
       run: |
-        ansible-galaxy collection list | grep -E "(windows)"
+        docker run --rm sstormes/awx-azure-ee:latest ansible-galaxy collection list | grep -E "(windows)"
     
     - name: Test Windows connectivity
       run: |
@@ -151,12 +146,8 @@ jobs:
 
   # Run with ansible-runner (AWX-like execution)
   ansible-runner-job:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, rhel-windows-ee]
     if: ${{ inputs.target_os == 'both' || github.event_name == 'push' }}
-    
-    container:
-      image: sstormes/awx-azure-ee:latest
-      options: --user root
     
     steps:
     - name: Checkout repository
