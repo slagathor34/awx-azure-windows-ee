@@ -2,6 +2,16 @@
 
 This document explains how to set up the required GitHub secrets for the Red Hat and Windows automation workflows.
 
+## Workflow Targeting
+
+The workflow supports flexible targeting options:
+
+- **Windows Only** (default): Configure only `WINDOWS_USERNAME` and `WINDOWS_PASSWORD` secrets
+- **Red Hat Only**: Configure only SSH keys or Red Hat credentials  
+- **Both Platforms**: Configure secrets for both Windows and Red Hat systems
+
+You can select the target OS when manually triggering the workflow from the Actions tab.
+
 ## Required Secrets
 
 The GitHub Actions workflow requires the following secrets to be configured in your repository settings.

@@ -12,6 +12,23 @@ This repository contains the configuration files to build an AWX Execution Envir
 - `build.sh` - Build script for the execution environment
 - `.github/workflows/` - GitHub Actions automation workflows
 
+## GitHub Actions Workflow
+
+The included GitHub Actions workflow provides flexible automation options:
+
+### Execution Options
+- **Manual Trigger**: Choose specific target OS from the Actions tab
+  - `windows` (default) - Run only Windows automation
+  - `redhat` - Run only Red Hat automation  
+  - `both` - Run both Windows and Red Hat automation plus combined jobs
+- **Push Trigger**: Automatically runs all configured jobs when code changes
+
+### Self-Hosted Runner
+- Runs on your local infrastructure using Docker containers
+- Access to internal networks and servers
+- No GitHub Actions minutes consumed
+- Complete control over execution environment
+
 ## Features
 
 This execution environment includes:

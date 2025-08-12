@@ -13,14 +13,22 @@ on:
         - staging
         - prod
       target_os:
-        description: 'Target operating system'
+        description: 'Target operating system(s) to configure'
         required: true
-        default: 'both'
+        default: 'windows'
         type: choice
         options:
-        - redhat
         - windows
+        - redhat
         - both
+        
+  # Workflow execution logic:
+  # - Manual trigger: Runs selected target_os (default: windows only)
+  # - Push trigger: Runs all configured targets
+  # - 'windows': Runs only Windows automation
+  # - 'redhat': Runs only Red Hat automation  
+  # - 'both': Runs Windows, Red Hat, and combined ansible-runner jobs
+  
   push:
     branches: [ main ]
     paths:
@@ -45,7 +53,7 @@ env:
 jobs:
   redhat-automation:
     runs-on: [self-hosted, rhel-windows-ee]
-    if: ${{ inputs.target_os == 'redhat' || inputs.target_os == 'both' || github.event_name == 'push' }}
+    if: ${{ inputs.target_os == 'redhat' || inputs.target_os == 'both' || (github.event_name == 'push' && inputs.target_os == null) }}
     
     steps:
     - name: Checkout repository
@@ -108,7 +116,7 @@ jobs:
 
   windows-automation:
     runs-on: [self-hosted, rhel-windows-ee]
-    if: ${{ inputs.target_os == 'windows' || inputs.target_os == 'both' || github.event_name == 'push' }}
+    if: ${{ inputs.target_os == 'windows' || inputs.target_os == 'both' || github.event_name == 'push' || inputs.target_os == null }}
     
     steps:
     - name: Checkout repository
@@ -156,7 +164,7 @@ jobs:
   # Run with ansible-runner (AWX-like execution)
   ansible-runner-job:
     runs-on: [self-hosted, rhel-windows-ee]
-    if: ${{ inputs.target_os == 'both' || github.event_name == 'push' }}
+    if: ${{ inputs.target_os == 'both' || (github.event_name == 'push' && inputs.target_os == null) }}
     
     steps:
     - name: Checkout repository
