@@ -1,24 +1,13 @@
-# Core Azure SDK packages needed for azure.azcollection
+# Core packages for Red Hat and Windows automation
 ansible-runner
-azure-cli-core
-azure-common
-azure-identity
-azure-mgmt-authorization
-azure-mgmt-compute
-azure-mgmt-network
-azure-mgmt-resource
-azure-mgmt-storage
-azure-mgmt-keyvault
-azure-mgmt-sql
-azure-mgmt-redis
-azure-mgmt-web
-azure-mgmt-containerinstance
-azure-mgmt-monitor
-azure-storage-blob
-msrestazure
-msrest
 
-# Windows automation - WinRM and CredSSP packages
+# SSH and system automation packages
+paramiko
+netaddr
+dnspython
+passlib
+
+# Windows automation - WinRM and authentication packages
 pywinrm[credssp]
 requests-credssp
 ntlm-auth
@@ -27,6 +16,11 @@ pykerberos
 gssapi
 xmltodict
 lxml
+
+# Red Hat specific packages
+python-rpm-spec
+# Note: rpm is already installed in the system
+# Note: dnf is a system package, not a Python package
 
 # Additional Python dependencies
 cryptography
@@ -43,9 +37,7 @@ pyjwt
 pyyaml
 jinja2
 python-dateutil
-netaddr
-dnspython
 
-# Kerberos support (optional, may be commented out if build fails)
+# Optional Kerberos support 
 # pykerberos
 # requests-kerberos

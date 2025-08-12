@@ -3,7 +3,7 @@ version: 3
 
 images:
   base_image:
-    name: quay.io/centos/centos:stream9
+    name: 'quay.io/centos/centos:stream9'
 
 dependencies:
   galaxy: requirements.yml
@@ -12,10 +12,27 @@ dependencies:
 
 additional_build_steps:
   prepend_base:
-    - RUN dnf -y update && dnf clean all
+    - RUN dnf -y update && 
+        dnf -y install 
+          openssh-clients 
+          sshpass 
+          rsync 
+          python3-devel 
+          gcc 
+          openssl-devel 
+          libffi-devel 
+          krb5-devel 
+          krb5-libs 
+          krb5-workstation 
+          libxml2-devel 
+          libxslt-devel 
+          cyrus-sasl-devel 
+          cyrus-sasl-gssapi && 
+        dnf clean all
+
   prepend_galaxy:
-    - RUN pip3 install --upgrade pip setuptools wheel
+    - COPY _build/requirements.yml /tmp/requirements.yml
+
   append_final:
-    - RUN rpm --import https://packages.microsoft.com/keys/microsoft.asc
-    - RUN echo -e "[azure-cli]\nname=Azure CLI\nbaseurl=https://packages.microsoft.com/yumrepos/azure-cli\nenabled=1\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" > /etc/yum.repos.d/azure-cli.repo
-    - RUN dnf install -y azure-cli
+    - RUN chmod -R g+rw /opt/ansible
+    - USER ansible

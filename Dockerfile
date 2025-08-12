@@ -5,7 +5,7 @@ FROM $ANSIBLE_BUILDER_IMAGE
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Install system dependencies
+# Install system dependencies for SSH and WinRM automation
 USER root
 RUN dnf -y update && \
     dnf -y install \
@@ -16,8 +16,9 @@ RUN dnf -y update && \
         gcc \
         openssl-devel \
         libffi-devel \
-        rust \
-        cargo \
+        openssh-clients \
+        sshpass \
+        rsync \
         krb5-devel \
         krb5-libs \
         krb5-workstation \
@@ -31,11 +32,6 @@ RUN dnf -y update && \
 RUN pip3 install --upgrade pip setuptools wheel && \
     pip3 install ansible-core ansible-runner
 
-# Install Azure CLI
-RUN rpm --import https://packages.microsoft.com/keys/microsoft.asc && \
-    echo -e "[azure-cli]\nname=Azure CLI\nbaseurl=https://packages.microsoft.com/yumrepos/azure-cli\nenabled=1\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" > /etc/yum.repos.d/azure-cli.repo && \
-    dnf install -y azure-cli
-
 # Create requirements file for Python dependencies
 COPY requirements.txt /tmp/requirements.txt
 
@@ -48,10 +44,9 @@ RUN useradd -m ansible
 # Switch to ansible user
 USER ansible
 
-# Install Ansible collections
-RUN ansible-galaxy collection install azure.azcollection --force && \
+# Install Ansible collections for Red Hat and Windows automation
+RUN ansible-galaxy collection install community.general --force && \
     ansible-galaxy collection install ansible.posix --force && \
-    ansible-galaxy collection install community.general --force && \
     ansible-galaxy collection install community.crypto --force && \
     ansible-galaxy collection install ansible.windows --force && \
     ansible-galaxy collection install community.windows --force

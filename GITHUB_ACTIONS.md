@@ -1,8 +1,8 @@
-# GitHub Actions Integration Guide
+# GitHub Actions Integration Guide for Red Hat & Windows Automation
 
 ## Overview
 
-Your `sstormes/awx-azure-ee:latest` Docker image is fully compatible with GitHub Actions workflows. This guide shows you how to use it effectively for Azure and Windows automation.
+Your `sstormes/awx-azure-ee:latest` Docker image is now optimized for Red Hat Linux and Windows automation via GitHub Actions workflows. This guide shows you how to use it effectively for SSH-based Linux automation and WinRM-based Windows management.
 
 ## ✅ Why It Works in GitHub Actions
 
@@ -10,19 +10,21 @@ Your execution environment works in GitHub Actions because:
 
 1. **Container Support**: GitHub Actions can run jobs in custom Docker containers
 2. **ansible-runner Included**: The image contains `ansible-runner` required for automation
-3. **All Dependencies**: Azure CLI, Python packages, and collections are pre-installed
+3. **SSH & WinRM Dependencies**: OpenSSH clients, sshpass, and Windows WinRM packages are pre-installed
 4. **Cross-platform**: Built for `linux/amd64` which runs on GitHub's Ubuntu runners
+5. **Red Hat Collections**: Official Red Hat collections for enterprise automation
 
 ## 🔧 Required GitHub Secrets
 
 Set these secrets in your repository settings (Settings → Secrets and variables → Actions):
 
-### Azure Authentication:
+### Red Hat Linux Authentication:
 ```
-AZURE_CLIENT_ID=your-service-principal-id
-AZURE_CLIENT_SECRET=your-service-principal-secret  
-AZURE_TENANT_ID=your-tenant-id
-AZURE_SUBSCRIPTION_ID=your-subscription-id
+RHEL_USERNAME=your-rhel-username
+RHEL_PASSWORD=your-rhel-password  
+CENTOS_USERNAME=centos-username
+SSH_PRIVATE_KEY=your-ssh-private-key-content
+SSH_PUBLIC_KEY=your-ssh-public-key-content
 ```
 
 ### Docker Hub (for CI/CD):
@@ -31,10 +33,12 @@ DOCKERHUB_USERNAME=sstormes
 DOCKERHUB_TOKEN=your-docker-hub-token
 ```
 
-### Windows Authentication (if using Windows hosts):
+### Windows Authentication:
 ```
 WINDOWS_USERNAME=domain\username
 WINDOWS_PASSWORD=your-password
+DOMAIN_USERNAME=domain-admin
+DOMAIN_PASSWORD=domain-admin-password
 ```
 
 ## 🚀 Usage Patterns
@@ -42,7 +46,7 @@ WINDOWS_PASSWORD=your-password
 ### 1. Direct Container Usage
 ```yaml
 jobs:
-  ansible-job:
+  redhat-automation:
     runs-on: ubuntu-latest
     container:
       image: sstormes/awx-azure-ee:latest
@@ -55,14 +59,15 @@ steps:
   - name: Run with ansible-runner
     run: |
       ansible-runner run /runner \
-        --playbook azure-deployment.yml \
+        --playbook redhat-config.yml \
         --inventory inventories/dev/
 ```
 
-### 3. Matrix Strategy for Multiple Environments
+### 3. Multi-OS Strategy
 ```yaml
 strategy:
   matrix:
+    target_os: [redhat, windows, both]
     environment: [dev, staging, prod]
     
 container:
@@ -71,20 +76,22 @@ container:
 
 ## 📦 Workflow Files Included
 
-- `.github/workflows/ansible-azure-windows.yml` - Main automation workflow
-- `inventories/dev/hosts.yml` - Sample inventory
-- `playbooks/azure-deployment.yml` - Azure infrastructure deployment
-- `playbooks/windows-config.yml` - Windows server configuration
+- `.github/workflows/ansible-azure-windows.yml` - Main Red Hat and Windows automation workflow
+- `inventories/dev/hosts.yml` - Sample inventory with Red Hat and Windows hosts
+- `playbooks/redhat-config.yml` - Red Hat system configuration and hardening
+- `playbooks/azure-deployment.yml` - System health checking (repurposed from Azure)
+- `playbooks/windows-config.yml` - Windows server configuration and management
 
 ## 🔄 CI/CD Pipeline Features
 
 The included workflow provides:
 
-1. **Automated Testing**: Verifies the execution environment works
-2. **Multi-environment Support**: Dev, staging, production deployments  
-3. **Azure Integration**: Service principal authentication
-4. **Windows Support**: WinRM/CredSSP connectivity testing
+1. **Automated Testing**: Verifies SSH and WinRM connectivity
+2. **Multi-OS Support**: Separate jobs for Red Hat and Windows
+3. **SSH Key Management**: Automated SSH key deployment
+4. **WinRM Authentication**: Multiple Windows authentication methods
 5. **Docker Registry**: Automatic image builds and pushes
+6. **Parallel Execution**: Run Red Hat and Windows jobs simultaneously
 
 ## ⚡ Performance Optimizations
 

@@ -1,98 +1,120 @@
 ---
-- name: Deploy Azure Infrastructure
-  hosts: azure
-  gather_facts: false
+- name: Red Hat System Health Check and Reporting
+  hosts: redhat_servers
+  gather_facts: true
+  become: true
   
   vars:
-    resource_group_name: "rg-ansible-demo-{{ target_environment | default('dev') }}"
-    location: "East US"
+    report_dir: /tmp/ansible-reports
     
   tasks:
-    - name: Create resource group
-      azure.azcollection.azure_rm_resourcegroup:
-        name: "{{ resource_group_name }}"
-        location: "{{ location }}"
-        tags:
-          Environment: "{{ target_environment | default('dev') }}"
-          ManagedBy: "Ansible"
-          CreatedBy: "GitHub-Actions"
-      register: rg_result
+    - name: Create report directory
+      ansible.builtin.file:
+        path: "{{ report_dir }}"
+        state: directory
+        mode: '0755'
     
-    - name: Display resource group info
-      debug:
-        msg: "Resource group {{ rg_result.state.name }} created in {{ rg_result.state.location }}"
+    - name: Get system uptime
+      ansible.builtin.shell: uptime
+      register: system_uptime
+      changed_when: false
     
-    - name: Create storage account
-      azure.azcollection.azure_rm_storageaccount:
-        resource_group: "{{ resource_group_name }}"
-        name: "st{{ target_environment | default('dev') }}{{ ansible_date_time.epoch }}"
-        account_type: Standard_LRS
-        location: "{{ location }}"
-        tags:
-          Environment: "{{ target_environment | default('dev') }}"
-          ManagedBy: "Ansible"
-      register: storage_result
+    - name: Get system load
+      ansible.builtin.shell: cat /proc/loadavg
+      register: system_load
+      changed_when: false
     
-    - name: Create virtual network
-      azure.azcollection.azure_rm_virtualnetwork:
-        resource_group: "{{ resource_group_name }}"
-        name: "vnet-{{ target_environment | default('dev') }}"
-        address_prefixes: "10.0.0.0/16"
-        location: "{{ location }}"
-        tags:
-          Environment: "{{ target_environment | default('dev') }}"
-          ManagedBy: "Ansible"
+    - name: Check available updates
+      ansible.builtin.shell: dnf check-update --quiet | wc -l
+      register: available_updates
+      changed_when: false
+      failed_when: false
     
-    - name: Create subnet
-      azure.azcollection.azure_rm_subnet:
-        resource_group: "{{ resource_group_name }}"
-        name: "subnet-{{ target_environment | default('dev') }}"
-        address_prefix: "10.0.1.0/24"
-        virtual_network: "vnet-{{ target_environment | default('dev') }}"
+    - name: Get SELinux status
+      ansible.builtin.shell: getenforce
+      register: selinux_status
+      changed_when: false
+      failed_when: false
     
-    - name: Create public IP
-      azure.azcollection.azure_rm_publicipaddress:
-        resource_group: "{{ resource_group_name }}"
-        allocation_method: Static
-        name: "pip-vm-{{ target_environment | default('dev') }}"
-        location: "{{ location }}"
-        tags:
-          Environment: "{{ target_environment | default('dev') }}"
-          ManagedBy: "Ansible"
-      register: pip_result
+    - name: Get subscription status (RHEL only)
+      ansible.builtin.shell: subscription-manager status
+      register: subscription_status
+      changed_when: false
+      failed_when: false
+      when: ansible_distribution == "RedHat"
     
-    - name: Create Network Security Group with rules
-      azure.azcollection.azure_rm_securitygroup:
-        resource_group: "{{ resource_group_name }}"
-        name: "nsg-{{ target_environment | default('dev') }}"
-        location: "{{ location }}"
-        rules:
-          - name: 'allow_rdp'
-            protocol: Tcp
-            destination_port_range: 3389
-            access: Allow
-            priority: 1001
-            direction: Inbound
-          - name: 'allow_winrm_http'
-            protocol: Tcp
-            destination_port_range: 5985
-            access: Allow
-            priority: 1002
-            direction: Inbound
-          - name: 'allow_winrm_https'
-            protocol: Tcp
-            destination_port_range: 5986
-            access: Allow
-            priority: 1003
-            direction: Inbound
-        tags:
-          Environment: "{{ target_environment | default('dev') }}"
-          ManagedBy: "Ansible"
+    - name: Check critical services
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+      register: service_status
+      loop:
+        - sshd
+        - chronyd
+        - NetworkManager
+      failed_when: false
+      changed_when: false
+    
+    - name: Generate system report
+      ansible.builtin.template:
+        src: system-report.j2
+        dest: "{{ report_dir }}/system-report-{{ inventory_hostname }}.txt"
+        mode: '0644'
+      delegate_to: localhost
+      vars:
+        report_data:
+          hostname: "{{ inventory_hostname }}"
+          fqdn: "{{ ansible_fqdn }}"
+          distribution: "{{ ansible_distribution }}"
+          version: "{{ ansible_distribution_version }}"
+          kernel: "{{ ansible_kernel }}"
+          architecture: "{{ ansible_architecture }}"
+          uptime: "{{ system_uptime.stdout }}"
+          load: "{{ system_load.stdout }}"
+          updates: "{{ available_updates.stdout }}"
+          selinux: "{{ selinux_status.stdout | default('N/A') }}"
+          subscription: "{{ subscription_status.stdout | default('N/A') }}"
+          services: "{{ service_status.results }}"
+      when: false  # Disabled since we don't have template file
+    
+    - name: Create simple report instead
+      ansible.builtin.copy:
+        content: |
+          === Red Hat System Report for {{ inventory_hostname }} ===
+          Generated on: {{ ansible_date_time.date }} {{ ansible_date_time.time }}
+          
+          System Information:
+          - Hostname: {{ ansible_fqdn }}
+          - Distribution: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          - Kernel: {{ ansible_kernel }}
+          - Architecture: {{ ansible_architecture }}
+          - Uptime: {{ system_uptime.stdout }}
+          - Load Average: {{ system_load.stdout }}
+          
+          Security:
+          - SELinux Status: {{ selinux_status.stdout | default('N/A') }}
+          
+          Updates:
+          - Available Updates: {{ available_updates.stdout | default('0') }}
+          
+          {% if subscription_status is defined and subscription_status.stdout is defined %}
+          Subscription Status:
+          {{ subscription_status.stdout }}
+          {% endif %}
+          
+          Service Status:
+          {% for service in service_status.results %}
+          - {{ service.item }}: {{ 'Running' if service.status is defined and service.status.ActiveState == 'active' else 'Not Running' }}
+          {% endfor %}
+          
+        dest: "{{ report_dir }}/system-report-{{ inventory_hostname }}.txt"
+        mode: '0644'
+      delegate_to: localhost
     
     - name: Summary
       debug:
-        msg: 
-          - "Azure infrastructure deployed successfully!"
-          - "Resource Group: {{ resource_group_name }}"
-          - "Storage Account: {{ storage_result.state.name }}"
-          - "Public IP: {{ pip_result.state.ip_address }}"
+        msg:
+          - "System health check completed for {{ inventory_hostname }}"
+          - "Report saved to {{ report_dir }}/system-report-{{ inventory_hostname }}.txt"
+          - "System uptime: {{ system_uptime.stdout }}"
+          - "Available updates: {{ available_updates.stdout | default('0') }}"
+          - "SELinux status: {{ selinux_status.stdout | default('N/A') }}"

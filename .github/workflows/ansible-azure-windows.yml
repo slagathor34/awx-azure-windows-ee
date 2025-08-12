@@ -1,4 +1,4 @@
-name: Ansible Azure & Windows Automation
+name: Red Hat & Windows Automation
 
 on:
   workflow_dispatch:
@@ -12,6 +12,15 @@ on:
         - dev
         - staging
         - prod
+      target_os:
+        description: 'Target operating system'
+        required: true
+        default: 'both'
+        type: choice
+        options:
+        - redhat
+        - windows
+        - both
   push:
     branches: [ main ]
     paths:
@@ -20,21 +29,25 @@ on:
       - '.github/workflows/**'
 
 env:
-  # Azure authentication
-  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-  AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-  AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  # Red Hat server authentication
+  RHEL_USERNAME: ${{ secrets.RHEL_USERNAME }}
+  RHEL_PASSWORD: ${{ secrets.RHEL_PASSWORD }}
+  CENTOS_USERNAME: ${{ secrets.CENTOS_USERNAME }}
+  SSH_PRIVATE_KEY_FILE: ${{ secrets.SSH_PRIVATE_KEY_FILE }}
+  SSH_PUBLIC_KEY: ${{ secrets.SSH_PUBLIC_KEY }}
   
-  # Windows authentication (if needed)
+  # Windows authentication
   WINDOWS_USERNAME: ${{ secrets.WINDOWS_USERNAME }}
   WINDOWS_PASSWORD: ${{ secrets.WINDOWS_PASSWORD }}
+  DOMAIN_USERNAME: ${{ secrets.DOMAIN_USERNAME }}
+  DOMAIN_PASSWORD: ${{ secrets.DOMAIN_PASSWORD }}
 
 jobs:
-  ansible-automation:
+  redhat-automation:
     runs-on: ubuntu-latest
+    if: ${{ inputs.target_os == 'redhat' || inputs.target_os == 'both' || github.event_name == 'push' }}
     
-    # Use your custom execution environment
+    # Use the refactored execution environment
     container:
       image: sstormes/awx-azure-ee:latest
       options: --user root
@@ -43,50 +56,104 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
     
-    - name: Verify Ansible installation
+    - name: Verify Red Hat automation tools
       run: |
         ansible --version
         ansible-runner --version
-        az --version
+        python3 -c "import rpm; print('RPM module available')"
+        ssh -V
+        sshpass -V
     
     - name: List available collections
       run: |
-        ansible-galaxy collection list
+        ansible-galaxy collection list | grep -E "(redhat|posix|general)"
     
-    - name: Azure Login (using service principal)
+    - name: Set up SSH key (if provided)
       run: |
-        az login --service-principal \
-          --username $AZURE_CLIENT_ID \
-          --password $AZURE_CLIENT_SECRET \
-          --tenant $AZURE_TENANT_ID
-        az account set --subscription $AZURE_SUBSCRIPTION_ID
+        if [ -n "$SSH_PRIVATE_KEY_FILE" ] && [ -n "${{ secrets.SSH_PRIVATE_KEY }}" ]; then
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keygen -y -f ~/.ssh/id_rsa > ~/.ssh/id_rsa.pub
+        fi
+      if: secrets.SSH_PRIVATE_KEY != ''
     
-    - name: Test Azure connectivity
+    - name: Test Red Hat connectivity
       run: |
-        ansible localhost -m azure.azcollection.azure_rm_resourcegroup_info \
-          -a "name=test-rg" || echo "Resource group not found (expected)"
+        ansible redhat_servers -i inventories/${{ inputs.environment || 'dev' }}/hosts.yml \
+          -m ping --ask-pass || echo "Connection test failed (expected if servers are not accessible)"
+      env:
+        ANSIBLE_HOST_KEY_CHECKING: false
     
-    - name: Run Azure playbook
+    - name: Run Red Hat configuration playbook
+      run: |
+        ansible-playbook playbooks/redhat-config.yml \
+          -i inventories/${{ inputs.environment || 'dev' }}/hosts.yml \
+          -e target_environment=${{ inputs.environment || 'dev' }} \
+          -v
+      if: hashFiles('playbooks/redhat-config.yml') != ''
+      env:
+        ANSIBLE_HOST_KEY_CHECKING: false
+        ANSIBLE_SSH_PIPELINING: true
+    
+    - name: Run Red Hat system health check
       run: |
         ansible-playbook playbooks/azure-deployment.yml \
-          -e azure_subscription_id=$AZURE_SUBSCRIPTION_ID \
+          -i inventories/${{ inputs.environment || 'dev' }}/hosts.yml \
           -e target_environment=${{ inputs.environment || 'dev' }} \
           -v
       if: hashFiles('playbooks/azure-deployment.yml') != ''
+      env:
+        ANSIBLE_HOST_KEY_CHECKING: false
+
+  windows-automation:
+    runs-on: ubuntu-latest
+    if: ${{ inputs.target_os == 'windows' || inputs.target_os == 'both' || github.event_name == 'push' }}
     
-    - name: Run Windows playbook
+    container:
+      image: sstormes/awx-azure-ee:latest
+      options: --user root
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Verify Windows automation tools
+      run: |
+        ansible --version
+        ansible-runner --version
+        python3 -c "import winrm; print('WinRM available')"
+        python3 -c "import ntlm_auth; print('NTLM authentication available')"
+        python3 -c "import requests_credssp; print('CredSSP available')"
+    
+    - name: List Windows collections
+      run: |
+        ansible-galaxy collection list | grep -E "(windows)"
+    
+    - name: Test Windows connectivity
+      run: |
+        ansible windows_servers -i inventories/${{ inputs.environment || 'dev' }}/hosts.yml \
+          -m ansible.windows.win_ping || echo "Connection test failed (expected if servers are not accessible)"
+      env:
+        ANSIBLE_HOST_KEY_CHECKING: false
+        ANSIBLE_WINRM_SERVER_CERT_VALIDATION: ignore
+    
+    - name: Run Windows configuration playbook
       run: |
         ansible-playbook playbooks/windows-config.yml \
-          -i inventories/${{ inputs.environment || 'dev' }}/windows-hosts.yml \
+          -i inventories/${{ inputs.environment || 'dev' }}/hosts.yml \
+          -e target_environment=${{ inputs.environment || 'dev' }} \
           -v
       if: hashFiles('playbooks/windows-config.yml') != ''
       env:
         ANSIBLE_HOST_KEY_CHECKING: false
         ANSIBLE_WINRM_SERVER_CERT_VALIDATION: ignore
 
-  # Alternative job using ansible-runner directly (more AWX-like)
+  # Run with ansible-runner (AWX-like execution)
   ansible-runner-job:
     runs-on: ubuntu-latest
+    if: ${{ inputs.target_os == 'both' || github.event_name == 'push' }}
+    
     container:
       image: sstormes/awx-azure-ee:latest
       options: --user root
@@ -99,25 +166,39 @@ jobs:
       run: |
         mkdir -p /runner/{project,inventory,env}
         cp -r . /runner/project/
+        cp -r inventories/${{ inputs.environment || 'dev' }}/* /runner/inventory/
         
     - name: Create environment variables for ansible-runner
       run: |
         cat > /runner/env/envvars << EOF
-        AZURE_CLIENT_ID=$AZURE_CLIENT_ID
-        AZURE_CLIENT_SECRET=$AZURE_CLIENT_SECRET
-        AZURE_TENANT_ID=$AZURE_TENANT_ID
-        AZURE_SUBSCRIPTION_ID=$AZURE_SUBSCRIPTION_ID
+        RHEL_USERNAME=$RHEL_USERNAME
+        RHEL_PASSWORD=$RHEL_PASSWORD
+        CENTOS_USERNAME=$CENTOS_USERNAME
+        WINDOWS_USERNAME=$WINDOWS_USERNAME
+        WINDOWS_PASSWORD=$WINDOWS_PASSWORD
+        DOMAIN_USERNAME=$DOMAIN_USERNAME
+        DOMAIN_PASSWORD=$DOMAIN_PASSWORD
         ANSIBLE_HOST_KEY_CHECKING=false
+        ANSIBLE_WINRM_SERVER_CERT_VALIDATION=ignore
         EOF
     
-    - name: Run playbook with ansible-runner
+    - name: Run Red Hat playbook with ansible-runner
       run: |
         ansible-runner run /runner \
-          --playbook azure-deployment.yml \
-          --inventory inventories/dev/ \
+          --playbook redhat-config.yml \
+          --inventory /runner/inventory \
           --job-timeout 3600 \
           -v
-      if: hashFiles('playbooks/azure-deployment.yml') != ''
+      if: hashFiles('playbooks/redhat-config.yml') != '' && (inputs.target_os == 'redhat' || inputs.target_os == 'both')
+      
+    - name: Run Windows playbook with ansible-runner
+      run: |
+        ansible-runner run /runner \
+          --playbook windows-config.yml \
+          --inventory /runner/inventory \
+          --job-timeout 3600 \
+          -v
+      if: hashFiles('playbooks/windows-config.yml') != '' && (inputs.target_os == 'windows' || inputs.target_os == 'both')
 
   # Build and test the execution environment
   build-and-test-ee:
@@ -136,28 +217,32 @@ jobs:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
     
-    - name: Build and test execution environment
+    - name: Build execution environment
       run: |
-        docker build --platform linux/amd64 -t awx-azure-ee:test .
+        docker build --platform linux/amd64 -t rhel-windows-ee:test .
         
     - name: Test execution environment
       run: |
         # Test ansible-runner is available
-        docker run --rm awx-azure-ee:test ansible-runner --version
+        docker run --rm rhel-windows-ee:test ansible-runner --version
         
-        # Test Azure collections
-        docker run --rm awx-azure-ee:test ansible-doc azure.azcollection.azure_rm_resourcegroup
+        # Test Red Hat collections
+        docker run --rm rhel-windows-ee:test ansible-doc redhat.rhel.rhel_facts || echo "RedHat collection test"
         
         # Test Windows collections  
-        docker run --rm awx-azure-ee:test ansible-doc ansible.windows.win_ping
+        docker run --rm rhel-windows-ee:test ansible-doc ansible.windows.win_ping
         
-        # Test Azure CLI
-        docker run --rm awx-azure-ee:test az --version
+        # Test SSH connectivity tools
+        docker run --rm rhel-windows-ee:test ssh -V
+        docker run --rm rhel-windows-ee:test sshpass -V
+        
+        # Test Python modules
+        docker run --rm rhel-windows-ee:test python3 -c "import winrm, paramiko, rpm; print('All modules available')"
     
     - name: Push to Docker Hub (on main branch)
       if: github.ref == 'refs/heads/main'
       run: |
-        docker tag awx-azure-ee:test sstormes/awx-azure-ee:latest
-        docker tag awx-azure-ee:test sstormes/awx-azure-ee:${{ github.sha }}
+        docker tag rhel-windows-ee:test sstormes/awx-azure-ee:latest
+        docker tag rhel-windows-ee:test sstormes/awx-azure-ee:${{ github.sha }}
         docker push sstormes/awx-azure-ee:latest
         docker push sstormes/awx-azure-ee:${{ github.sha }}

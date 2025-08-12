@@ -1,35 +1,27 @@
-# AWX Azure + Windows Execution Environment
+# Red Hat & Windows Automation Execution Environment
 
-This repository contains the configuration files to build an AWX Execution Environment with full support for Azure Re## Use Cases
-
-This execution environment is perfect for:
-
-• **AWX/Ansible Tower**: Production-ready execution environment with ansible-runner
-• **GitHub Actions**: CI/CD automation workflows (see GITHUB_ACTIONS.md)
-• **Hybrid Cloud Management**: Manage both Azure resources and Windows infrastructure
-• **Azure VM Configuration**: Deploy Azure VMs and configure Windows settings
-• **Domain Operations**: Automate Windows domain-joined machines via CredSSP
-• **Multi-platform Automation**: Single environment for Linux (Azure) and Windows automation
-• **Enterprise Windows Management**: Advanced authentication for enterprise Windows environmentsnager (azure_rm) modules and Windows automation via WinRM and CredSSP.
+This repository contains the configuration files to build an AWX Execution Environment with comprehensive support for Red Hat Enterprise Linux automation via SSH and Windows automation via WinRM and CredSSP.
 
 ## Files Included
 
 - `Dockerfile` - Traditional Docker build file
 - `execution-environment.yml` - Modern ansible-builder configuration
-- `requirements.txt` - Python dependencies including Azure SDK and Windows WinRM packages
-- `requirements.yml` - Ansible Galaxy collections including Windows collections
-- `bindep.txt` - System dependencies including XML and Kerberos libraries
+- `requirements.txt` - Python dependencies including SSH and Windows WinRM packages
+- `requirements.yml` - Ansible Galaxy collections including Red Hat and Windows collections
+- `bindep.txt` - System dependencies including SSH, XML and Kerberos libraries
 - `build.sh` - Build script for the execution environment
+- `.github/workflows/` - GitHub Actions automation workflows
 
 ## Features
 
 This execution environment includes:
 
-**Azure Support:**
-- **Azure Collections**: Complete `azure.azcollection` with all azure_rm modules
-- **Azure CLI**: Latest Azure CLI tools
-- **Python Dependencies**: All required Azure SDK packages and dependencies
-- **Authentication**: Service Principal, CLI, and Managed Identity support
+**Red Hat Linux Support:**
+- **SSH Collections**: Complete SSH connectivity with key-based and password authentication
+- **Red Hat Collections**: Official `redhat.rhel` and `redhat.satellite` collections
+- **System Tools**: SSH clients, sshpass, rsync for file operations
+- **Package Management**: DNF/YUM automation and RPM handling
+- **Security**: SELinux management and system hardening capabilities
 
 **Windows Support:**
 - **Windows Collections**: `ansible.windows` and `community.windows`
@@ -40,8 +32,9 @@ This execution environment includes:
 - **XML Processing**: LXML for complex XML operations
 
 **Additional Features:**
-- **System Dependencies**: Required system packages for compilation and Kerberos support
+- **System Dependencies**: Required system packages for SSH connectivity and Kerberos support
 - **Community Collections**: Extended functionality with community modules
+- **ansible-runner**: Full AWX execution environment compatibility
 
 ## Building the Execution Environment
 
@@ -58,20 +51,32 @@ pip3 install ansible-builder
 ### Method 2: Using Docker directly
 
 ```bash
-docker build -t awx-azure-ee:latest .
+docker build -t rhel-windows-ee:latest .
 ```
 
 ## Usage in AWX
 
 1. Build the execution environment using one of the methods above
 2. Push the image to your container registry:
-   ```bash
-docker tag awx-azure-ee:latest your-registry/awx-azure-ee:latest
-docker push your-registry/awx-azure-ee:latest
-   ```
+
+```bash
+docker tag rhel-windows-ee:latest your-registry/rhel-windows-ee:latest
+docker push your-registry/rhel-windows-ee:latest
+```
+
 3. In AWX, go to Administration → Execution Environments
 4. Add a new execution environment with your image URL
 5. Use this execution environment in your job templates
+
+## GitHub Actions Integration
+
+This execution environment is optimized for GitHub Actions workflows. See `GITHUB_ACTIONS.md` for detailed integration guide.
+
+Key features for CI/CD:
+- Pre-built image available: `sstormes/awx-azure-ee:latest`
+- Multi-OS support (Red Hat and Windows)
+- Parallel job execution
+- ansible-runner integration
 
 ## Testing the Environment
 
@@ -79,19 +84,41 @@ You can test the execution environment locally:
 
 ```bash
 # Run interactively
-docker run -it --rm awx-azure-ee:latest /bin/bash
+docker run -it --rm rhel-windows-ee:latest /bin/bash
 
-# Test Azure collections
-ansible-doc azure.azcollection.azure_rm_resourcegroup
+# Test Red Hat collections
+ansible-doc redhat.rhel.rhel_facts
 
-# Test Windows collections  
+# Test Windows collections
 ansible-doc ansible.windows.win_ping
 
-# Test Azure CLI
-az --version
+# Test SSH connectivity tools
+ssh -V
+sshpass -V
 
 # Test WinRM packages
 python3 -c "import winrm; print('WinRM available')"
+```
+
+## Red Hat Authentication
+
+This execution environment supports multiple Red Hat Linux authentication methods:
+
+1. **SSH Keys**: Public/private key pairs (recommended)
+2. **Password**: Username/password authentication
+3. **Sudo**: Privilege escalation support
+
+### Example Red Hat Inventory Configuration:
+
+```yaml
+redhat_servers:
+  hosts:
+    rhel-server-01:
+      ansible_host: 192.168.1.10
+      ansible_user: ansible
+      ansible_ssh_private_key_file: ~/.ssh/id_rsa
+      ansible_become: true
+      ansible_become_method: sudo
 ```
 
 ## Windows Authentication
@@ -117,36 +144,24 @@ windows_hosts:
       ansible_winrm_server_cert_validation: ignore
 ```
 
-## Azure Authentication
-
-This execution environment supports multiple Azure authentication methods:
-
-1. **Service Principal**: Set environment variables:
-   - `AZURE_CLIENT_ID`
-   - `AZURE_SECRET`
-   - `AZURE_TENANT`
-   - `AZURE_SUBSCRIPTION_ID`
-
-2. **Azure CLI**: Use `az login` within the container
-
-3. **Managed Identity**: When running on Azure resources
-
 ## Included Collections
 
-- `azure.azcollection` - Complete Azure Resource Manager modules
+- `redhat.rhel` - Red Hat Enterprise Linux automation
+- `redhat.satellite` - Red Hat Satellite management
 - `ansible.posix` - POSIX utilities
 - `community.general` - General community modules
 - `community.crypto` - Cryptographic modules
-- `kubernetes.core` - Kubernetes support for AKS
 - `ansible.windows` - Core Windows modules
 - `community.windows` - Extended Windows functionality
 
 ## Python Packages
 
-**Azure SDK packages:**
-- Azure Management libraries for all services
-- Azure Storage libraries
-- Azure Identity and authentication
+**Red Hat automation packages:**
+- `paramiko` - SSH protocol support
+- `netaddr` - Network address manipulation
+- `dnspython` - DNS toolkit
+- `passlib` - Password hashing library
+- `python-rpm-spec` - RPM package handling
 
 **Windows automation packages:**
 - `pywinrm` - WinRM protocol support
@@ -161,31 +176,41 @@ This execution environment supports multiple Azure authentication methods:
 
 ## System Dependencies
 
-- Git for version control
-- Python development headers
-- GCC compiler
-- OpenSSL development libraries
-- Kerberos libraries and tools (krb5-devel, krb5-workstation)
-- XML processing libraries (libxml2-devel, libxslt-devel)
-- SASL libraries for authentication (cyrus-sasl-devel, cyrus-sasl-gssapi)
-- Rust and Cargo for certain package compilations
+- **SSH Tools**: OpenSSH clients, sshpass, rsync
+- **Development Tools**: Git, Python development headers, GCC compiler
+- **Security Libraries**: OpenSSL development libraries
+- **Kerberos Libraries**: (krb5-devel, krb5-workstation)
+- **XML Processing**: (libxml2-devel, libxslt-devel)
+- **SASL Libraries**: (cyrus-sasl-devel, cyrus-sasl-gssapi)
+- **Package Management**: RPM, DNF for Red Hat systems
 
 ## Use Cases
 
 This execution environment is perfect for:
 
-- **Hybrid Cloud Management**: Manage both Azure resources and Windows infrastructure
-- **Azure VM Configuration**: Deploy Azure VMs and configure Windows settings
-- **Domain Operations**: Automate Windows domain-joined machines via CredSSP
-- **Multi-platform Automation**: Single environment for Linux (Azure) and Windows automation
-- **Enterprise Windows Management**: Advanced authentication for enterprise Windows environments
+- **AWX/Ansible Tower**: Production-ready execution environment with ansible-runner
+- **GitHub Actions**: CI/CD automation workflows (see GITHUB_ACTIONS.md)
+- **Hybrid Infrastructure**: Manage both Red Hat Linux and Windows systems
+- **Enterprise Automation**: Large-scale Red Hat and Windows fleet management
+- **Configuration Management**: Standardized system configuration across platforms
+- **Security Compliance**: Automated security policy enforcement
+- **Multi-platform DevOps**: Single environment for Linux and Windows automation
+
+## Sample Playbooks
+
+The repository includes sample playbooks:
+
+- `playbooks/redhat-config.yml` - Red Hat system configuration and hardening
+- `playbooks/azure-deployment.yml` - System health checking and reporting (renamed from Azure)
+- `playbooks/windows-config.yml` - Windows server configuration and management
 
 ## Troubleshooting
 
-**Azure Issues:**
-1. **Build failures**: Check that you have sufficient disk space and Docker is running
-2. **Authentication issues**: Verify your Azure credentials and permissions
-3. **Module not found**: Ensure the execution environment is properly configured in AWX
+**Red Hat Issues:**
+1. **SSH connection failures**: Verify SSH is enabled and accessible
+2. **Authentication failures**: Check SSH keys or username/password
+3. **Sudo issues**: Ensure user has proper sudo privileges
+4. **Package management**: Verify DNF/YUM repository access
 
 **Windows Issues:**
 1. **WinRM connection failures**: Verify WinRM is enabled on target Windows hosts
@@ -194,14 +219,24 @@ This execution environment is perfect for:
 4. **Certificate errors**: Use `ansible_winrm_server_cert_validation: ignore` for testing
 
 **Network Issues:**
-1. Check firewall settings for WinRM (ports 5985/5986) and Azure API access
-2. Verify proxy settings if applicable
+1. **SSH connectivity**: Check firewall settings for SSH (port 22)
+2. **WinRM connectivity**: Check firewall settings for WinRM (ports 5985/5986)
+3. **Proxy settings**: Verify proxy configuration if applicable
 
 ## Contributing
 
 To add additional packages or collections:
+
 1. Update `requirements.txt` for Python packages
 2. Update `requirements.yml` for Ansible collections
 3. Update `bindep.txt` for system packages
 4. Update `Dockerfile` for additional system configuration
 5. Rebuild the execution environment
+
+## GitHub Repository
+
+This execution environment is available at:
+**https://github.com/slagathor34/awx-azure-windows-ee**
+
+Docker Hub image:
+**sstormes/awx-azure-ee:latest**

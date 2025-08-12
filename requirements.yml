@@ -1,20 +1,25 @@
 ---
 collections:
-  - name: azure.azcollection
-    version: ">=1.19.0"
+  # Core collections for general automation
+  - name: community.general
+    version: ">=7.0.0"
     source: https://galaxy.ansible.com
   - name: ansible.posix
     version: ">=1.5.0"
     source: https://galaxy.ansible.com
-  - name: community.general
-    version: ">=7.0.0"
-    source: https://galaxy.ansible.com
   - name: community.crypto
     version: ">=2.15.0"
     source: https://galaxy.ansible.com
-  - name: kubernetes.core
-    version: ">=2.4.0"
-    source: https://galaxy.ansible.com
+    
+  # Note: Red Hat collections require Red Hat Automation Hub subscription
+  # - name: redhat.rhel
+  #   version: ">=1.0.0"
+  #   source: https://console.redhat.com/api/automation-hub/
+  # - name: redhat.satellite
+  #   version: ">=3.0.0" 
+  #   source: https://console.redhat.com/api/automation-hub/
+    
+  # Windows automation collections
   - name: ansible.windows
     version: ">=1.14.0"
     source: https://galaxy.ansible.com

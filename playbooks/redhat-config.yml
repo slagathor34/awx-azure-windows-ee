@@ -1,0 +1,180 @@
+---
+- name: Configure Red Hat Enterprise Linux Servers
+  hosts: redhat_servers
+  gather_facts: true
+  become: true
+  
+  vars:
+    required_packages:
+      - vim
+      - git
+      - htop
+      - wget
+      - curl
+      - unzip
+      - rsync
+      - chrony
+    
+    services_to_enable:
+      - chronyd
+      - sshd
+    
+    firewall_ports:
+      - 22/tcp
+      - 80/tcp
+      - 443/tcp
+  
+  tasks:
+    - name: Display system information
+      debug:
+        msg:
+          - "Hostname: {{ inventory_hostname }}"
+          - "OS Family: {{ ansible_os_family }}"
+          - "Distribution: {{ ansible_distribution }}"
+          - "Version: {{ ansible_distribution_version }}"
+          - "Architecture: {{ ansible_architecture }}"
+          - "Kernel: {{ ansible_kernel }}"
+    
+    - name: Update all packages
+      ansible.builtin.dnf:
+        name: "*"
+        state: latest
+        update_cache: yes
+      when: ansible_os_family == "RedHat"
+      register: package_update
+    
+    - name: Display update results
+      debug:
+        msg: "{{ package_update.results | default(['No updates performed']) }}"
+      when: package_update is defined
+    
+    - name: Install required packages
+      ansible.builtin.dnf:
+        name: "{{ required_packages }}"
+        state: present
+      when: ansible_os_family == "RedHat"
+    
+    - name: Start and enable services
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: started
+        enabled: yes
+      loop: "{{ services_to_enable }}"
+    
+    - name: Configure firewall
+      ansible.posix.firewalld:
+        port: "{{ item }}"
+        permanent: yes
+        state: enabled
+        immediate: yes
+      loop: "{{ firewall_ports }}"
+      ignore_errors: true  # In case firewalld is not installed/running
+    
+    - name: Create ansible user if not exists
+      ansible.builtin.user:
+        name: ansible
+        groups: wheel
+        append: yes
+        create_home: yes
+        shell: /bin/bash
+        system: no
+      when: ansible_user != 'ansible'
+    
+    - name: Set up SSH key for ansible user
+      ansible.posix.authorized_key:
+        user: ansible
+        key: "{{ lookup('env', 'SSH_PUBLIC_KEY') }}"
+        state: present
+      when: lookup('env', 'SSH_PUBLIC_KEY') | length > 0
+    
+    - name: Configure sudo for ansible user
+      ansible.builtin.lineinfile:
+        path: /etc/sudoers.d/ansible
+        line: 'ansible ALL=(ALL) NOPASSWD: ALL'
+        create: yes
+        mode: '0440'
+        validate: 'visudo -cf %s'
+      when: ansible_user != 'ansible'
+    
+    - name: Set timezone
+      community.general.timezone:
+        name: "{{ timezone | default('UTC') }}"
+    
+    - name: Configure NTP with chrony
+      ansible.builtin.template:
+        src: chrony.conf.j2
+        dest: /etc/chrony.conf
+        backup: yes
+      notify: restart chronyd
+      when: false  # Disabled since we don't have the template file
+    
+    - name: Check disk usage
+      ansible.builtin.shell: df -h
+      register: disk_usage
+      changed_when: false
+    
+    - name: Display disk usage
+      debug:
+        msg: "{{ disk_usage.stdout_lines }}"
+    
+    - name: Check memory usage
+      ansible.builtin.shell: free -h
+      register: memory_usage
+      changed_when: false
+    
+    - name: Display memory usage
+      debug:
+        msg: "{{ memory_usage.stdout_lines }}"
+    
+    - name: Get running services
+      ansible.builtin.shell: systemctl list-units --type=service --state=running --no-pager --no-legend | awk '{print $1}'
+      register: running_services
+      changed_when: false
+    
+    - name: Display running services count
+      debug:
+        msg: "Running services: {{ running_services.stdout_lines | length }}"
+    
+    - name: Create maintenance directory
+      ansible.builtin.file:
+        path: /opt/maintenance
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+    
+    - name: Create system info script
+      ansible.builtin.copy:
+        content: |
+          #!/bin/bash
+          echo "=== System Information ==="
+          echo "Hostname: $(hostname -f)"
+          echo "OS: $(cat /etc/redhat-release)"
+          echo "Kernel: $(uname -r)"
+          echo "Architecture: $(uname -m)"
+          echo "Uptime: $(uptime)"
+          echo "Load Average: $(cat /proc/loadavg)"
+          echo "Memory Usage:"
+          free -h
+          echo "Disk Usage:"
+          df -h
+          echo "Last Updated: $(date)"
+        dest: /opt/maintenance/system-info.sh
+        mode: '0755'
+        owner: root
+        group: root
+    
+    - name: Run system info script
+      ansible.builtin.shell: /opt/maintenance/system-info.sh
+      register: system_info
+      changed_when: false
+    
+    - name: Display system info
+      debug:
+        msg: "{{ system_info.stdout_lines }}"
+
+  handlers:
+    - name: restart chronyd
+      ansible.builtin.systemd:
+        name: chronyd
+        state: restarted
