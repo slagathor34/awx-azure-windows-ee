@@ -1,0 +1,50 @@
+# Core Azure SDK packages needed for azure.azcollection
+azure-cli-core
+azure-common
+azure-identity
+azure-mgmt-authorization
+azure-mgmt-compute
+azure-mgmt-network
+azure-mgmt-resource
+azure-mgmt-storage
+azure-mgmt-keyvault
+azure-mgmt-sql
+azure-mgmt-redis
+azure-mgmt-web
+azure-mgmt-containerinstance
+azure-mgmt-monitor
+azure-storage-blob
+msrestazure
+msrest
+
+# Windows automation - WinRM and CredSSP packages
+pywinrm[credssp]
+requests-credssp
+ntlm-auth
+pyspnego[ntlm]
+pykerberos
+gssapi
+xmltodict
+lxml
+
+# Additional Python dependencies
+cryptography
+requests
+packaging
+cffi
+pycparser
+six
+urllib3
+certifi
+charset-normalizer
+idna
+pyjwt
+pyyaml
+jinja2
+python-dateutil
+netaddr
+dnspython
+
+# Kerberos support (optional, may be commented out if build fails)
+# pykerberos
+# requests-kerberos

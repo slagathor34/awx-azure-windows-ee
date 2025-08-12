@@ -1,0 +1,43 @@
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+persistent-terminals.log
+
+# Docker build context
+context/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Ansible
+*.retry
+.ansible/
+
+# Azure
+.azure/
