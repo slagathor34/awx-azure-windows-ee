@@ -50,6 +50,12 @@ cd /home/runner
     --replace
 
 echo "Runner configured successfully!"
+
+# Ensure proper permissions on runner directories
+mkdir -p /home/runner/_work/_tool
+chmod -R 755 /home/runner/_work
+chmod -R 755 /home/runner/.cache
+
 echo "Starting runner..."
 
 # Start the runner

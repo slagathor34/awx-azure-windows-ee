@@ -11,6 +11,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - runner-work:/home/runner/_work
       - runner-cache:/home/runner/.cache
+      - runner-tools:/home/runner/_work/_tool
     environment:
       - GITHUB_TOKEN=${GITHUB_TOKEN}
       - GITHUB_REPOSITORY=${GITHUB_REPOSITORY:-slagathor34/awx-azure-windows-ee}
@@ -27,3 +28,4 @@ networks:
 volumes:
   runner-work:
   runner-cache:
+  runner-tools:

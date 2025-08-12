@@ -34,9 +34,18 @@ RUN useradd -m -s /bin/bash runner && \
     usermod -aG docker runner && \
     echo "runner ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
-# Switch to runner user
+# Switch to runner user and create necessary directories
 USER runner
 WORKDIR /home/runner
+
+# Create runner directories with proper permissions
+RUN mkdir -p /home/runner/_work && \
+    mkdir -p /home/runner/.runner && \
+    mkdir -p /home/runner/.cache && \
+    chmod 755 /home/runner/_work /home/runner/.runner /home/runner/.cache
+
+# Switch back to root to copy supervisord config and set final permissions
+USER root
 
 # Download GitHub Actions Runner based on architecture
 ARG TARGETPLATFORM
@@ -66,9 +75,15 @@ RUN mkdir -p /home/runner/scripts
 COPY --chown=runner:runner scripts/ /home/runner/scripts/
 RUN chmod +x /home/runner/scripts/*.sh
 
-# Copy supervisor configuration
+# Copy supervisor configuration and entrypoint
 USER root
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Ensure proper ownership of all runner directories
+RUN chown -R runner:runner /home/runner && \
+    chmod -R 755 /home/runner/_work /home/runner/.runner /home/runner/.cache
 
 # Expose Docker daemon (if needed)
 EXPOSE 2376
@@ -76,5 +91,5 @@ EXPOSE 2376
 # Set working directory
 WORKDIR /home/runner
 
-# Start supervisor
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+# Use custom entrypoint to handle permissions
+ENTRYPOINT ["/entrypoint.sh"]
