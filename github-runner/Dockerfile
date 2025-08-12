@@ -38,11 +38,23 @@ RUN useradd -m -s /bin/bash runner && \
 USER runner
 WORKDIR /home/runner
 
-# Download and extract GitHub Actions runner
-RUN curl -o actions-runner-linux-x64-2.319.1.tar.gz -L https://github.com/actions/runner/releases/download/v2.319.1/actions-runner-linux-x64-2.319.1.tar.gz
-RUN echo "3f6efb7488a183e291fc2c62876e14c9ee732864173734facc85a1bfb1744464  actions-runner-linux-x64-2.319.1.tar.gz" | shasum -a 256 -c
-RUN tar xzf ./actions-runner-linux-x64-2.319.1.tar.gz
-RUN rm actions-runner-linux-x64-2.319.1.tar.gz
+# Download GitHub Actions Runner based on architecture
+ARG TARGETPLATFORM
+ARG RUNNER_VERSION=2.319.1
+
+RUN set -x && \
+    if [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
+        export RUNNER_ARCH=arm64; \
+        export RUNNER_SHA=38c74ee95c8076818d8894fc29bb07b21b7e5ac036fbccd9b07c0b80bb8ce4a2; \
+    else \
+        export RUNNER_ARCH=x64; \
+        export RUNNER_SHA=3f6efb7488a183e291fc2c62876e14c9ee732864173734facc85a1bfb1744464; \
+    fi && \
+    curl -o actions-runner-linux-${RUNNER_ARCH}-${RUNNER_VERSION}.tar.gz -L \
+        https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-${RUNNER_ARCH}-${RUNNER_VERSION}.tar.gz && \
+    echo "${RUNNER_SHA}  actions-runner-linux-${RUNNER_ARCH}-${RUNNER_VERSION}.tar.gz" | shasum -a 256 -c && \
+    tar xzf ./actions-runner-linux-${RUNNER_ARCH}-${RUNNER_VERSION}.tar.gz && \
+    rm actions-runner-linux-${RUNNER_ARCH}-${RUNNER_VERSION}.tar.gz
 
 # Install additional dependencies
 RUN sudo ./bin/installdependencies.sh
