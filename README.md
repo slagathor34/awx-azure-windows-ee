@@ -1,6 +1,16 @@
 # AWX Azure + Windows Execution Environment
 
-This repository contains the configuration files to build an AWX Execution Environment with full support for Azure Resource Manager (azure_rm) modules and Windows automation via WinRM and CredSSP.
+This repository contains the configuration files to build an AWX Execution Environment with full support for Azure Re## Use Cases
+
+This execution environment is perfect for:
+
+• **AWX/Ansible Tower**: Production-ready execution environment with ansible-runner
+• **GitHub Actions**: CI/CD automation workflows (see GITHUB_ACTIONS.md)
+• **Hybrid Cloud Management**: Manage both Azure resources and Windows infrastructure
+• **Azure VM Configuration**: Deploy Azure VMs and configure Windows settings
+• **Domain Operations**: Automate Windows domain-joined machines via CredSSP
+• **Multi-platform Automation**: Single environment for Linux (Azure) and Windows automation
+• **Enterprise Windows Management**: Advanced authentication for enterprise Windows environmentsnager (azure_rm) modules and Windows automation via WinRM and CredSSP.
 
 ## Files Included
 

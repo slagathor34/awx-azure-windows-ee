@@ -1,0 +1,84 @@
+---
+- name: Configure Windows Servers
+  hosts: windows
+  gather_facts: true
+  
+  tasks:
+    - name: Test Windows connectivity
+      ansible.windows.win_ping:
+      register: ping_result
+    
+    - name: Display connectivity result
+      debug:
+        msg: "Successfully connected to {{ inventory_hostname }}"
+    
+    - name: Get Windows version info
+      ansible.windows.win_shell: |
+        Get-ComputerInfo | Select-Object WindowsProductName, WindowsVersion, OSArchitecture
+      register: win_info
+    
+    - name: Display Windows info
+      debug:
+        msg: "{{ win_info.stdout_lines }}"
+    
+    - name: Check Windows services
+      ansible.windows.win_service_info:
+        name: "{{ item }}"
+      loop:
+        - WinRM
+        - Spooler
+        - BITS
+      register: service_info
+    
+    - name: Display service status
+      debug:
+        msg: "Service {{ item.item }} is {{ item.services[0].state }}"
+      loop: "{{ service_info.results }}"
+      when: item.services | length > 0
+    
+    - name: Install Windows features (example)
+      ansible.windows.win_feature:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - IIS-WebServerRole
+        - IIS-WebServer
+        - IIS-CommonHttpFeatures
+      register: feature_result
+      when: ansible_os_family == "Windows"
+    
+    - name: Create a directory
+      ansible.windows.win_file:
+        path: C:\ansible-demo
+        state: directory
+    
+    - name: Create a test file
+      ansible.windows.win_copy:
+        content: |
+          This file was created by Ansible via GitHub Actions
+          Date: {{ ansible_date_time.date }}
+          Time: {{ ansible_date_time.time }}
+          Host: {{ inventory_hostname }}
+        dest: C:\ansible-demo\github-actions-test.txt
+    
+    - name: Get file content
+      ansible.windows.win_shell: Get-Content C:\ansible-demo\github-actions-test.txt
+      register: file_content
+    
+    - name: Display file content
+      debug:
+        msg: "{{ file_content.stdout_lines }}"
+    
+    - name: Windows update check (optional - can be slow)
+      community.windows.win_updates:
+        category_names:
+          - SecurityUpdates
+          - CriticalUpdates
+        state: searched
+      register: update_result
+      when: check_windows_updates | default(false) | bool
+    
+    - name: Display update results
+      debug:
+        msg: "Found {{ update_result.found_update_count | default(0) }} updates"
+      when: update_result is defined

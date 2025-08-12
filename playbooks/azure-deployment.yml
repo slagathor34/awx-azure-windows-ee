@@ -1,0 +1,98 @@
+---
+- name: Deploy Azure Infrastructure
+  hosts: azure
+  gather_facts: false
+  
+  vars:
+    resource_group_name: "rg-ansible-demo-{{ target_environment | default('dev') }}"
+    location: "East US"
+    
+  tasks:
+    - name: Create resource group
+      azure.azcollection.azure_rm_resourcegroup:
+        name: "{{ resource_group_name }}"
+        location: "{{ location }}"
+        tags:
+          Environment: "{{ target_environment | default('dev') }}"
+          ManagedBy: "Ansible"
+          CreatedBy: "GitHub-Actions"
+      register: rg_result
+    
+    - name: Display resource group info
+      debug:
+        msg: "Resource group {{ rg_result.state.name }} created in {{ rg_result.state.location }}"
+    
+    - name: Create storage account
+      azure.azcollection.azure_rm_storageaccount:
+        resource_group: "{{ resource_group_name }}"
+        name: "st{{ target_environment | default('dev') }}{{ ansible_date_time.epoch }}"
+        account_type: Standard_LRS
+        location: "{{ location }}"
+        tags:
+          Environment: "{{ target_environment | default('dev') }}"
+          ManagedBy: "Ansible"
+      register: storage_result
+    
+    - name: Create virtual network
+      azure.azcollection.azure_rm_virtualnetwork:
+        resource_group: "{{ resource_group_name }}"
+        name: "vnet-{{ target_environment | default('dev') }}"
+        address_prefixes: "10.0.0.0/16"
+        location: "{{ location }}"
+        tags:
+          Environment: "{{ target_environment | default('dev') }}"
+          ManagedBy: "Ansible"
+    
+    - name: Create subnet
+      azure.azcollection.azure_rm_subnet:
+        resource_group: "{{ resource_group_name }}"
+        name: "subnet-{{ target_environment | default('dev') }}"
+        address_prefix: "10.0.1.0/24"
+        virtual_network: "vnet-{{ target_environment | default('dev') }}"
+    
+    - name: Create public IP
+      azure.azcollection.azure_rm_publicipaddress:
+        resource_group: "{{ resource_group_name }}"
+        allocation_method: Static
+        name: "pip-vm-{{ target_environment | default('dev') }}"
+        location: "{{ location }}"
+        tags:
+          Environment: "{{ target_environment | default('dev') }}"
+          ManagedBy: "Ansible"
+      register: pip_result
+    
+    - name: Create Network Security Group with rules
+      azure.azcollection.azure_rm_securitygroup:
+        resource_group: "{{ resource_group_name }}"
+        name: "nsg-{{ target_environment | default('dev') }}"
+        location: "{{ location }}"
+        rules:
+          - name: 'allow_rdp'
+            protocol: Tcp
+            destination_port_range: 3389
+            access: Allow
+            priority: 1001
+            direction: Inbound
+          - name: 'allow_winrm_http'
+            protocol: Tcp
+            destination_port_range: 5985
+            access: Allow
+            priority: 1002
+            direction: Inbound
+          - name: 'allow_winrm_https'
+            protocol: Tcp
+            destination_port_range: 5986
+            access: Allow
+            priority: 1003
+            direction: Inbound
+        tags:
+          Environment: "{{ target_environment | default('dev') }}"
+          ManagedBy: "Ansible"
+    
+    - name: Summary
+      debug:
+        msg: 
+          - "Azure infrastructure deployed successfully!"
+          - "Resource Group: {{ resource_group_name }}"
+          - "Storage Account: {{ storage_result.state.name }}"
+          - "Public IP: {{ pip_result.state.ip_address }}"

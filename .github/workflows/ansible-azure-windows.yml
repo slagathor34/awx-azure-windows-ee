@@ -1,0 +1,163 @@
+name: Ansible Azure & Windows Automation
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+        - dev
+        - staging
+        - prod
+  push:
+    branches: [ main ]
+    paths:
+      - 'playbooks/**'
+      - 'inventories/**'
+      - '.github/workflows/**'
+
+env:
+  # Azure authentication
+  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+  AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  
+  # Windows authentication (if needed)
+  WINDOWS_USERNAME: ${{ secrets.WINDOWS_USERNAME }}
+  WINDOWS_PASSWORD: ${{ secrets.WINDOWS_PASSWORD }}
+
+jobs:
+  ansible-automation:
+    runs-on: ubuntu-latest
+    
+    # Use your custom execution environment
+    container:
+      image: sstormes/awx-azure-ee:latest
+      options: --user root
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Verify Ansible installation
+      run: |
+        ansible --version
+        ansible-runner --version
+        az --version
+    
+    - name: List available collections
+      run: |
+        ansible-galaxy collection list
+    
+    - name: Azure Login (using service principal)
+      run: |
+        az login --service-principal \
+          --username $AZURE_CLIENT_ID \
+          --password $AZURE_CLIENT_SECRET \
+          --tenant $AZURE_TENANT_ID
+        az account set --subscription $AZURE_SUBSCRIPTION_ID
+    
+    - name: Test Azure connectivity
+      run: |
+        ansible localhost -m azure.azcollection.azure_rm_resourcegroup_info \
+          -a "name=test-rg" || echo "Resource group not found (expected)"
+    
+    - name: Run Azure playbook
+      run: |
+        ansible-playbook playbooks/azure-deployment.yml \
+          -e azure_subscription_id=$AZURE_SUBSCRIPTION_ID \
+          -e target_environment=${{ inputs.environment || 'dev' }} \
+          -v
+      if: hashFiles('playbooks/azure-deployment.yml') != ''
+    
+    - name: Run Windows playbook
+      run: |
+        ansible-playbook playbooks/windows-config.yml \
+          -i inventories/${{ inputs.environment || 'dev' }}/windows-hosts.yml \
+          -v
+      if: hashFiles('playbooks/windows-config.yml') != ''
+      env:
+        ANSIBLE_HOST_KEY_CHECKING: false
+        ANSIBLE_WINRM_SERVER_CERT_VALIDATION: ignore
+
+  # Alternative job using ansible-runner directly (more AWX-like)
+  ansible-runner-job:
+    runs-on: ubuntu-latest
+    container:
+      image: sstormes/awx-azure-ee:latest
+      options: --user root
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Prepare ansible-runner directory
+      run: |
+        mkdir -p /runner/{project,inventory,env}
+        cp -r . /runner/project/
+        
+    - name: Create environment variables for ansible-runner
+      run: |
+        cat > /runner/env/envvars << EOF
+        AZURE_CLIENT_ID=$AZURE_CLIENT_ID
+        AZURE_CLIENT_SECRET=$AZURE_CLIENT_SECRET
+        AZURE_TENANT_ID=$AZURE_TENANT_ID
+        AZURE_SUBSCRIPTION_ID=$AZURE_SUBSCRIPTION_ID
+        ANSIBLE_HOST_KEY_CHECKING=false
+        EOF
+    
+    - name: Run playbook with ansible-runner
+      run: |
+        ansible-runner run /runner \
+          --playbook azure-deployment.yml \
+          --inventory inventories/dev/ \
+          --job-timeout 3600 \
+          -v
+      if: hashFiles('playbooks/azure-deployment.yml') != ''
+
+  # Build and test the execution environment
+  build-and-test-ee:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+    
+    - name: Build and test execution environment
+      run: |
+        docker build --platform linux/amd64 -t awx-azure-ee:test .
+        
+    - name: Test execution environment
+      run: |
+        # Test ansible-runner is available
+        docker run --rm awx-azure-ee:test ansible-runner --version
+        
+        # Test Azure collections
+        docker run --rm awx-azure-ee:test ansible-doc azure.azcollection.azure_rm_resourcegroup
+        
+        # Test Windows collections  
+        docker run --rm awx-azure-ee:test ansible-doc ansible.windows.win_ping
+        
+        # Test Azure CLI
+        docker run --rm awx-azure-ee:test az --version
+    
+    - name: Push to Docker Hub (on main branch)
+      if: github.ref == 'refs/heads/main'
+      run: |
+        docker tag awx-azure-ee:test sstormes/awx-azure-ee:latest
+        docker tag awx-azure-ee:test sstormes/awx-azure-ee:${{ github.sha }}
+        docker push sstormes/awx-azure-ee:latest
+        docker push sstormes/awx-azure-ee:${{ github.sha }}
