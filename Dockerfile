@@ -27,9 +27,9 @@ RUN dnf -y update && \
         cyrus-sasl-gssapi && \
     dnf clean all
 
-# Install Ansible
+# Install Ansible and ansible-runner
 RUN pip3 install --upgrade pip setuptools wheel && \
-    pip3 install ansible-core
+    pip3 install ansible-core ansible-runner
 
 # Install Azure CLI
 RUN rpm --import https://packages.microsoft.com/keys/microsoft.asc && \
