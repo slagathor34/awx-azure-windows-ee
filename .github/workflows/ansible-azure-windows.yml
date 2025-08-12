@@ -63,22 +63,23 @@ jobs:
       run: |
         docker run --rm sstormes/awx-azure-ee:latest ansible-galaxy collection list | grep -E "(redhat|posix|general)"
     
-    - name: Set up SSH key (if provided)
+    - name: Setup SSH key
       run: |
-        if [ -n "$SSH_PRIVATE_KEY_FILE" ] && [ -n "${{ secrets.SSH_PRIVATE_KEY }}" ]; then
+        if [ -n "$SSH_PRIVATE_KEY" ]; then
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keygen -y -f ~/.ssh/id_rsa > ~/.ssh/id_rsa.pub
         fi
-      if: secrets.SSH_PRIVATE_KEY != ''
+      env:
+        SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
     
     - name: Test Red Hat connectivity
       run: |
-        ansible redhat_servers -i inventories/${{ inputs.environment || 'dev' }}/hosts.yml \
-          -m ping --ask-pass || echo "Connection test failed (expected if servers are not accessible)"
-      env:
-        ANSIBLE_HOST_KEY_CHECKING: false
+        docker run --rm -v ${{ github.workspace }}:/workspace -w /workspace \
+          -e ANSIBLE_HOST_KEY_CHECKING=false \
+          sstormes/awx-azure-ee:latest \
+          ansible redhat_servers -i inventories/${{ inputs.environment || 'dev' }}/hosts.yml -m ping --ask-pass || echo "Connection test failed (expected if servers are not accessible)"
     
     - name: Run Red Hat configuration playbook
       run: |
@@ -127,21 +128,29 @@ jobs:
     
     - name: Test Windows connectivity
       run: |
-        ansible windows_servers -i inventories/${{ inputs.environment || 'dev' }}/hosts.yml \
-          -m ansible.windows.win_ping || echo "Connection test failed (expected if servers are not accessible)"
-      env:
-        ANSIBLE_HOST_KEY_CHECKING: false
-        ANSIBLE_WINRM_SERVER_CERT_VALIDATION: ignore
+        docker run --rm -v ${{ github.workspace }}:/workspace -w /workspace \
+          -e ANSIBLE_HOST_KEY_CHECKING=false \
+          -e ANSIBLE_WINRM_SERVER_CERT_VALIDATION=ignore \
+          sstormes/awx-azure-ee:latest \
+          ansible windows_servers -i inventories/${{ inputs.environment || 'dev' }}/hosts.yml -m ansible.windows.win_ping || echo "Connection test failed (expected if servers are not accessible)"
     
     - name: Run Windows configuration playbook
       run: |
-        ansible-playbook playbooks/windows-config.yml \
-          -i inventories/${{ inputs.environment || 'dev' }}/hosts.yml \
-          -e target_environment=${{ inputs.environment || 'dev' }} \
-          -v
+        docker run --rm -v ${{ github.workspace }}:/workspace -w /workspace \
+          -e ANSIBLE_HOST_KEY_CHECKING=false \
+          -e ANSIBLE_WINRM_SERVER_CERT_VALIDATION=ignore \
+          -e WINDOWS_USERNAME -e WINDOWS_PASSWORD -e DOMAIN_USERNAME -e DOMAIN_PASSWORD \
+          sstormes/awx-azure-ee:latest \
+          ansible-playbook playbooks/windows-config.yml \
+            -i inventories/${{ inputs.environment || 'dev' }}/hosts.yml \
+            -e target_environment=${{ inputs.environment || 'dev' }} \
+            -v
       if: hashFiles('playbooks/windows-config.yml') != ''
       env:
-        ANSIBLE_HOST_KEY_CHECKING: false
+        WINDOWS_USERNAME: ${{ secrets.WINDOWS_USERNAME }}
+        WINDOWS_PASSWORD: ${{ secrets.WINDOWS_PASSWORD }}
+        DOMAIN_USERNAME: ${{ secrets.DOMAIN_USERNAME }}
+        DOMAIN_PASSWORD: ${{ secrets.DOMAIN_PASSWORD }}
         ANSIBLE_WINRM_SERVER_CERT_VALIDATION: ignore
 
   # Run with ansible-runner (AWX-like execution)
